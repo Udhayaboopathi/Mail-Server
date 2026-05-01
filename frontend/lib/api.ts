@@ -37,6 +37,10 @@ import { getAuthSnapshot, useAuthStore } from "@/lib/auth";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
+function getApiBase() {
+  return API_BASE.replace(/\/+$/, "").replace(/\/api$/, "");
+}
+
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw new Error(await response.text());
