@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -88,18 +88,14 @@ export default function LoginPage() {
             className="w-full rounded-2xl border border-black/10 bg-paper px-4 py-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             placeholder="Email"
             value={email}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              setEmail(event.target.value)
-            }
+            onChange={(event) => setEmail(event.currentTarget.value)}
           />
           <input
             className="w-full rounded-2xl border border-black/10 bg-paper px-4 py-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             placeholder="Password"
             type="password"
             value={password}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              setPassword(event.target.value)
-            }
+            onChange={(event) => setPassword(event.currentTarget.value)}
           />
           {error ? <p className="text-sm text-ember">{error}</p> : null}
           <button

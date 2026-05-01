@@ -31,6 +31,7 @@ import type {
   User,
   Whitelabel,
   Webhook,
+  Rule,
 } from "@/types";
 import { getAuthSnapshot, useAuthStore } from "@/lib/auth";
 
