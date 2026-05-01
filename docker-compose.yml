@@ -8,7 +8,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: mail-postgres
-    env_file: backend.env
+    env_file: .env
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -95,7 +95,7 @@ services:
   backend:
     build: ./backend
     container_name: mail-backend
-    env_file: backend.env
+    env_file: .env
     ports:
       - "25:25" # SMTP
       - "587:587" # SMTP TLS
@@ -124,7 +124,7 @@ services:
   celery-worker:
     build: ./backend
     container_name: mail-celery
-    env_file: backend.env
+    env_file: .env
     command:
       - celery
       - -A
@@ -157,7 +157,7 @@ services:
   frontend:
     build: ./frontend
     container_name: mail-frontend
-    env_file: frontend.env
+    env_file: .env
     ports:
       - "3000:3000"
     depends_on:
