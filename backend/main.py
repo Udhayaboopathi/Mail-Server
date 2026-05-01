@@ -36,17 +36,12 @@ from api.routers import (
     tasks_router,
 )
 from config import settings
-from database import engine
 from imap.server import create_imap_server
-from models import Base
 from smtp.server import create_smtp_server
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
     smtp_server = None
     imap_task = None
     if settings.enable_mail_servers:
