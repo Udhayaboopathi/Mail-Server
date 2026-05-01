@@ -18,7 +18,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: valkey/valkey:unstable-alpine3.23
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "16379:6379"
@@ -54,7 +54,7 @@ services:
 
   backend:
     build: ./backend
-    env_file: .env
+    env_file: backend.env
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -97,7 +97,7 @@ services:
 
   celery-worker:
     build: ./backend
-    env_file: .env
+    env_file: backend.env
     command:
       - celery
       - -A
@@ -125,7 +125,7 @@ services:
 
   frontend:
     build: ./frontend
-    env_file: .env
+    env_file: frontend.env
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://yourdomain.com}
       FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}

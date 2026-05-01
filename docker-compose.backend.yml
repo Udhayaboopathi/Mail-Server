@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file: backend.env
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: valkey/valkey:unstable-alpine3.23
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  spamassassin:
+    image: instantlinux/spamassassin:latest
+    volumes:
+      - ./infra/spamassassin:/etc/spamassassin:ro
+    healthcheck:
+      test: ["CMD-SHELL", "spamassassin -V >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  clamav:
+    image: clamav/clamav:latest
+    volumes:
+      - ./infra/clamav:/etc/clamav:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - clamdscan --version >/dev/null 2>&1 || clamscan --version >/dev/null 2>&1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build: ./backend
+    env_file: backend.env
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      spamassassin:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    volumes:
+      - maildata:/var/mail
+      - ./infra/dkim:/etc/dkim
+      - ./nginx/ssl:/etc/ssl
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+  maildata:
