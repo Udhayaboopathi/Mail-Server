@@ -138,7 +138,7 @@ services:
   frontend:
     build: ./frontend
     container_name: mail-frontend
-    env_file: frontend.env
+    env_file: ./frontend/.env.local
     ports:
       - "3000:3000"
     depends_on:
