@@ -14,24 +14,36 @@ from services.mailbox_service import MailboxService
 
 async def seed() -> None:
     async with AsyncSessionLocal() as session:
-        admin_email = "admin@yourdomain.com"
+        admin_email = settings.super_admin_email
+        admin_password = settings.super_admin_password
         result = await session.execute(select(User).where(User.email == admin_email))
         admin = result.scalar_one_or_none()
         if admin is None:
             admin = User(
                 email=admin_email,
-                hashed_password=AuthService.hash_password("changeme123"),
+                hashed_password=AuthService.hash_password(admin_password),
                 is_admin=True,
                 is_active=True,
             )
             session.add(admin)
             await session.commit()
             await session.refresh(admin)
+        else:
+            admin.hashed_password = AuthService.hash_password(admin_password)
+            admin.is_admin = True
+            admin.is_active = True
+            await session.commit()
+            await session.refresh(admin)
 
-        result = await session.execute(select(Domain).where(Domain.name == "yourdomain.com"))
+        result = await session.execute(select(Domain).where(Domain.name == settings.mail_domain))
         domain = result.scalar_one_or_none()
         if domain is None:
-            domain = Domain(name="yourdomain.com", is_active=True, spf_record="v=spf1 ip4:YOUR_SERVER_IP mx ~all", dmarc_record="v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com; pct=100")
+            domain = Domain(
+                name=settings.mail_domain,
+                is_active=True,
+                spf_record=f"v=spf1 ip4:{settings.server_ip} mx ~all",
+                dmarc_record=f"v=DMARC1; p=quarantine; rua=mailto:dmarc@{settings.mail_domain}; pct=100",
+            )
             session.add(domain)
             await session.commit()
             await session.refresh(domain)

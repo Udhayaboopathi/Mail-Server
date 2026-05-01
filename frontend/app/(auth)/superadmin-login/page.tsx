@@ -12,7 +12,7 @@ export default function SuperAdminLoginPage() {
   const setSession = useAuthStore((state: AuthState) => state.setSession);
   const clearSession = useAuthStore((state: AuthState) => state.clearSession);
 
-  const [email, setEmail] = useState("admin@yourdomain.com");
+  const [email, setEmail] = useState("admin@mail.nexudo.dev");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
