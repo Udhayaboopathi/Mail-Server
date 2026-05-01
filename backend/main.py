@@ -19,6 +19,7 @@ from api.routers import (
     ediscovery,
     labels,
     mail,
+    folders,
     mailboxes,
     notes_router,
     pgp,
