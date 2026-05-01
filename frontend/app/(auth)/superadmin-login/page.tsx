@@ -1,57 +1,50 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { type AuthState, useAuthStore } from "@/lib/auth";
 import { api } from "@/lib/api";
-import { useWhitelabel } from "@/components/providers/WhitelabelProvider";
+import { type AuthState, useAuthStore } from "@/lib/auth";
 
-export default function LoginPage() {
+export default function SuperAdminLoginPage() {
   const router = useRouter();
-  const { whitelabel, setWhitelabel } = useWhitelabel();
   const setSession = useAuthStore((state: AuthState) => state.setSession);
-  const [email, setEmail] = useState("");
+  const clearSession = useAuthStore((state: AuthState) => state.clearSession);
+
+  const [email, setEmail] = useState("admin@yourdomain.com");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const domain = params.get("domain");
-    if (!domain) {
-      return;
-    }
-    fetch(`/api/admin/whitelabel?domain=${encodeURIComponent(domain)}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (data) {
-          setWhitelabel(data);
-        }
-      })
-      .catch(() => undefined);
-  }, [setWhitelabel]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
+
       if (!response.ok) {
         throw new Error("Invalid credentials");
       }
+
       const tokens = await response.json();
       setSession(tokens);
-      router.push("/mail/inbox");
+
+      // Validate this account can access admin APIs before redirecting.
+      await api.admin.stats();
+      router.push("/admin");
     } catch (loginError) {
+      clearSession();
       setError(
-        loginError instanceof Error ? loginError.message : "Login failed",
+        loginError instanceof Error
+          ? loginError.message
+          : "Superadmin login failed",
       );
     } finally {
       setLoading(false);
@@ -65,54 +58,48 @@ export default function LoginPage() {
         className="w-full max-w-md rounded-3xl border border-black/10 bg-white/90 p-8 shadow-panel backdrop-blur dark:border-gray-700 dark:bg-gray-900/90"
       >
         <div className="mb-8 space-y-3">
-          {whitelabel.logo_url ? (
-            <img
-              src={whitelabel.logo_url}
-              alt={whitelabel.company_name ?? "Logo"}
-              className="h-10"
-            />
-          ) : (
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">
-              Self-hosted mail
-            </p>
-          )}
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-ember">
+            Admin Console
+          </p>
           <h1 className="text-3xl font-semibold text-ink dark:text-gray-100">
-            {whitelabel.company_name ?? "Sign in"}
+            Superadmin sign in
           </h1>
           <p className="text-sm text-ink/70 dark:text-gray-400">
-            Access your mailbox and admin tools.
+            Use a superadmin account to access the admin dashboard.
           </p>
         </div>
+
         <div className="space-y-4">
           <input
             className="w-full rounded-2xl border border-black/10 bg-paper px-4 py-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-            placeholder="Email"
+            placeholder="Superadmin email"
             value={email}
             onChange={(event) => setEmail(event.currentTarget.value)}
+            autoComplete="email"
           />
+
           <input
             className="w-full rounded-2xl border border-black/10 bg-paper px-4 py-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             placeholder="Password"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
+            autoComplete="current-password"
           />
+
           {error ? <p className="text-sm text-ember">{error}</p> : null}
+
           <button
             disabled={loading}
             className="w-full rounded-2xl bg-ink px-4 py-3 font-medium text-paper transition hover:bg-ink/90 disabled:opacity-60"
-            style={{ backgroundColor: "var(--brand-primary)" }}
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Signing in..." : "Sign in to Admin"}
           </button>
-          <div className="text-right">
-            <Link href="/forgot-password" className="text-sm text-ember">
-              Forgot password?
-            </Link>
-          </div>
-          <div className="text-right">
-            <Link href="/superadmin-login" className="text-sm text-ember">
-              Superadmin login
+
+          <div className="text-sm text-ink/70 dark:text-gray-400">
+            Need normal mailbox access?{" "}
+            <Link href="/login" className="text-ember">
+              Go to user login
             </Link>
           </div>
         </div>
