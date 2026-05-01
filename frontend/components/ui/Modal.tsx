@@ -20,12 +20,12 @@ export function Modal({
   }
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-sm dark:bg-black/70"
       onClick={onClose}
     >
       <div
         className={cn(
-          "max-h-[90vh] w-full max-w-4xl overflow-auto rounded-3xl bg-white p-6 shadow-panel",
+          "max-h-[90vh] w-full max-w-4xl overflow-auto rounded-3xl bg-white p-6 shadow-panel dark:bg-gray-900",
           className,
         )}
         onClick={(event: { stopPropagation: () => void }) =>

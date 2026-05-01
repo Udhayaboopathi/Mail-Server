@@ -7,7 +7,7 @@ from datetime import date
 from email import message_from_bytes
 from email.message import EmailMessage
 from email.policy import default
-from email.utils import getaddresses
+from email.utils import getaddresses, make_msgid
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +25,15 @@ from models.mailbox import Mailbox
 from models.user import User
 from smtp.outbound import deliver_outbound
 from services.auth_service import AuthService
+from services.rules_service import apply_rules
+from services.thread_service import get_or_create_thread
+from services.tracking_service import fire_webhook
 from tasks.delivery import queue_delivery
+from tasks.retention_tasks import enforce_retention_policies
+from imap.maildir import MaildirBackend
 
 logger = logging.getLogger(__name__)
+_mail_backend = MaildirBackend()
 
 
 class SMTPHandler:
@@ -151,7 +157,7 @@ class SMTPHandler:
         reply["To"] = sender
         reply["Subject"] = str(autoresponder["subject"])
         reply.set_content(str(autoresponder["body"]))
-        await deliver_outbound(reply, sender)
+        await deliver_outbound(reply, sender, str(mailbox_row.id))
 
         await session.execute(
             text(
@@ -237,18 +243,19 @@ class SMTPHandler:
         except OSError:
             return True
 
-    async def _store_mail(self, session: AsyncSession, mailbox_row: Mailbox, raw_message: bytes, headers: dict[str, str]) -> None:
+    async def _store_mail(self, session: AsyncSession, mailbox_row: Mailbox, raw_message: bytes, headers: dict[str, str]) -> int:
         mailbox_path = Path(mailbox_row.maildir_path or Path(settings.maildir_base) / str(mailbox_row.id))
         maildir = mailbox.Maildir(str(mailbox_path), create=True)
         parsed = message_from_bytes(raw_message, policy=default)
         maildir_message = mailbox.MaildirMessage(parsed)
         for header, value in headers.items():
             maildir_message[header] = value
-        maildir.add(maildir_message)
+        key = maildir.add(maildir_message)
         maildir.flush()
         size_mb = len(raw_message) / (1024 * 1024)
         await session.execute(update(Mailbox).where(Mailbox.id == mailbox_row.id).values(used_mb=Mailbox.used_mb + size_mb, maildir_path=str(mailbox_path)))
         await session.commit()
+        return _mail_backend.uid_for_key(str(mailbox_row.id), "Inbox", key)
 
     async def auth_PLAIN(self, server, session, envelope, mechanism, auth_data):
         return await self._authenticate(server, auth_data)
@@ -322,7 +329,65 @@ class SMTPHandler:
             for recipient in envelope.rcpt_tos:
                 mailbox_row = await self._mailbox_for_address(db, recipient)
                 if mailbox_row is not None:
-                    await self._store_mail(db, mailbox_row, accepted_message, spam_headers)
+                    uid = await self._store_mail(db, mailbox_row, accepted_message, spam_headers)
+                    body_part = parsed.get_body(preferencelist=("plain",))
+                    body_text = body_part.get_content() if body_part else str(parsed.get_payload())
+                    message_payload = {
+                        "uid": uid,
+                        "folder": "Inbox",
+                        "from": parsed.get("From", ""),
+                        "to": parsed.get("To", ""),
+                        "subject": parsed.get("Subject", ""),
+                        "body": body_text,
+                        "has_attachment": any(parsed.iter_attachments()),
+                        "flags": [],
+                    }
+                    await apply_rules(str(mailbox_row.id), message_payload, db)
+                    await get_or_create_thread(
+                        str(mailbox_row.id),
+                        parsed.get("Message-ID"),
+                        parsed.get("In-Reply-To"),
+                        parsed.get("Subject", ""),
+                        db,
+                    )
+                    read_receipt_to = parsed.get("Read-Receipt-To")
+                    if read_receipt_to:
+                        message_id = parsed.get("Message-ID") or make_msgid()
+                        await db.execute(
+                            text(
+                                """
+                                INSERT INTO read_receipts (sender_mailbox_id, message_id, recipient_email, created_at)
+                                VALUES (:sender_mailbox_id, :message_id, :recipient_email, now())
+                                """
+                            ),
+                            {
+                                "sender_mailbox_id": str(mailbox_row.id),
+                                "message_id": message_id,
+                                "recipient_email": str(read_receipt_to),
+                            },
+                        )
+                        await db.commit()
+
+                    await fire_webhook(
+                        str(mailbox_row.id),
+                        "receive",
+                        {
+                            "from": parsed.get("From", ""),
+                            "to": parsed.get("To", ""),
+                            "subject": parsed.get("Subject", ""),
+                            "message_id": parsed.get("Message-ID"),
+                        },
+                        db,
+                    )
+
+                    retention = await db.execute(
+                        text("SELECT retention_days FROM domains WHERE id = :domain_id"),
+                        {"domain_id": str(mailbox_row.domain_id)},
+                    )
+                    retention_row = retention.mappings().first()
+                    if retention_row and (retention_row.get("retention_days") or 0) > 0:
+                        enforce_retention_policies.delay()
+
                     await self._maybe_send_autoresponder(db, mailbox_row, envelope.mail_from)
                 else:
                     message = EmailMessage()
@@ -330,7 +395,9 @@ class SMTPHandler:
                     message["To"] = recipient
                     message["Subject"] = parsed.get("Subject", "")
                     message.set_content(str(parsed.get_body(preferencelist=("plain",)) or parsed.get_payload()))
-                    queue_delivery.delay({"from": envelope.mail_from, "to": recipient, "subject": message["Subject"], "body_text": message.get_content()})
-                    await deliver_outbound(message, recipient)
+                    sender_mailbox = await self._mailbox_for_address(db, envelope.mail_from)
+                    mailbox_id = str(sender_mailbox.id) if sender_mailbox else None
+                    queue_delivery.delay({"from": envelope.mail_from, "to": recipient, "subject": message["Subject"], "body_text": message.get_content(), "mailbox_id": mailbox_id})
+                    await deliver_outbound(message, recipient, mailbox_id)
             await self._upsert_contacts_for_outbound(db, envelope.mail_from, parsed)
         return "250 2.0.0 Message accepted for delivery"

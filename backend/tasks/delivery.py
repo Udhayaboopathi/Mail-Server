@@ -17,7 +17,7 @@ async def _deliver(payload: dict[str, Any]) -> str:
     message.set_content(payload.get("body_text", ""))
     if payload.get("body_html"):
         message.add_alternative(payload["body_html"], subtype="html")
-    await deliver_outbound(message, payload["to"])
+    await deliver_outbound(message, payload["to"], payload.get("mailbox_id"))
     return "sent"
 
 

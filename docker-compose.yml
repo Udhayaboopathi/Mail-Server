@@ -39,6 +39,27 @@ services:
       retries: 10
     restart: unless-stopped
 
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      REDIS_HOSTS: local:valkey:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - valkey
+    profiles:
+      - "dev"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    profiles:
+      - "dev"
+
   spamassassin:
     image: instantlinux/spamassassin:latest
     container_name: mail-spamassassin
@@ -94,12 +115,10 @@ services:
       - ./infra/dkim:/etc/dkim
       - ./nginx/ssl:/etc/ssl
     healthcheck:
-      test:
-        - CMD-SHELL
-        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 3
     restart: unless-stopped
 
   celery-worker:

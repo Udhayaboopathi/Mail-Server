@@ -6,6 +6,10 @@
   color-scheme: light;
 }
 
+.dark {
+  color-scheme: dark;
+}
+
 html,
 body {
   height: 100%;
@@ -22,6 +26,21 @@ body {
     radial-gradient(
       circle at bottom right,
       rgba(73, 107, 84, 0.08),
+      transparent 28%
+    );
+}
+
+.dark body {
+  @apply bg-gray-950 text-gray-100;
+  background-image:
+    radial-gradient(
+      circle at top left,
+      rgba(217, 79, 42, 0.18),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(73, 107, 84, 0.18),
       transparent 28%
     );
 }

@@ -207,6 +207,11 @@ async def configure_dns_auto(
 ) -> DNSAutoConfigResponse:
 	if not settings.server_ip:
 		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="SERVER_IP is not configured")
+	if not settings.cloudflare_api_token:
+		raise HTTPException(
+			status_code=status.HTTP_400_BAD_REQUEST,
+			detail="CLOUDFLARE_API_TOKEN is not configured. Add it to backend.env or use the DNS guide instead.",
+		)
 
 	result = await db.execute(select(Domain).where(Domain.id == domain_id))
 	domain = result.scalar_one_or_none()
