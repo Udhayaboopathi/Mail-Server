@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     ai_smart_reply_enabled: bool = Field(default=True, validation_alias="AI_SMART_REPLY_ENABLED")
     ai_priority_inbox_enabled: bool = Field(default=True, validation_alias="AI_PRIORITY_INBOX_ENABLED")
     ip_geo_url: str = Field(default="http://ip-api.com/json", validation_alias="IP_GEO_URL")
+    ip_geo_token: str = Field(default="", validation_alias="IP_GEO_TOKEN")
     server_ip: str = Field(default="", validation_alias="SERVER_IP")
     frontend_url: str = Field(default="https://yourdomain.com", validation_alias="FRONTEND_URL")
     next_public_api_url: str = Field(default="https://yourdomain.com", validation_alias="NEXT_PUBLIC_API_URL")

@@ -34,7 +34,10 @@ async def _lookup_location(ip: str | None) -> str | None:
         return None
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{settings.ip_geo_url}/{ip}")
+            headers = {}
+            if settings.ip_geo_token:
+                headers["Authorization"] = f"Bearer {settings.ip_geo_token}"
+            response = await client.get(f"{settings.ip_geo_url}/{ip}", headers=headers)
             if response.status_code != 200:
                 return None
             data = response.json()
