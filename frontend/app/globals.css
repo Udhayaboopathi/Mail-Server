@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-paper text-ink antialiased;
+  background-image:
+    radial-gradient(
+      circle at top left,
+      rgba(217, 79, 42, 0.08),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(73, 107, 84, 0.08),
+      transparent 28%
+    );
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  @apply transition-colors duration-150;
+}

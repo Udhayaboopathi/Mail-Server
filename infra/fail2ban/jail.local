@@ -1,0 +1,25 @@
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+backend = auto
+ignoreip = 127.0.0.1/8 ::1
+
+[sshd]
+enabled = false
+
+[smtp-auth]
+enabled = true
+port = 25,587
+filter = smtp-auth
+logpath = /var/log/mail.log
+maxretry = 5
+bantime = 1h
+
+[imap-auth]
+enabled = true
+port = 993
+filter = imap-auth
+logpath = /var/log/mail.log
+maxretry = 5
+bantime = 1h

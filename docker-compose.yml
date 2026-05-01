@@ -1,0 +1,184 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-emaildb}
+      POSTGRES_USER: ${POSTGRES_USER:-emailuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this}
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-emailuser} -d ${POSTGRES_DB:-emaildb}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  spamassassin:
+    image: instantlinux/spamassassin:latest
+    volumes:
+      - ./infra/spamassassin:/etc/spamassassin:ro
+    healthcheck:
+      test: ["CMD-SHELL", "spamassassin -V >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  clamav:
+    image: clamav/clamav:latest
+    volumes:
+      - ./infra/clamav:/etc/clamav:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - clamdscan --version >/dev/null 2>&1 || clamscan --version >/dev/null 2>&1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      MAILDIR_BASE: ${MAILDIR_BASE:-/var/mail}
+      MAX_MESSAGE_SIZE_MB: ${MAX_MESSAGE_SIZE_MB:-25}
+      DKIM_SELECTOR: ${DKIM_SELECTOR:-mail}
+      DKIM_PRIVATE_KEY_PATH: ${DKIM_PRIVATE_KEY_PATH:-/etc/dkim/private.key}
+      SPAMASSASSIN_HOST: ${SPAMASSASSIN_HOST:-spamassassin}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      SMTP_HOSTNAME: ${SMTP_HOSTNAME:-mail.yourdomain.com}
+      POSTGRES_DB: ${POSTGRES_DB:-emaildb}
+      POSTGRES_USER: ${POSTGRES_USER:-emailuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this}
+      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      spamassassin:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    volumes:
+      - maildata:/var/mail
+      - ./infra/dkim:/etc/dkim
+      - ./nginx/ssl:/etc/ssl
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build: ./backend
+    env_file: .env
+    command:
+      - celery
+      - -A
+      - tasks.celery_app:celery_app
+      - worker
+      - -B
+      - --loglevel=info
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      MAILDIR_BASE: ${MAILDIR_BASE:-/var/mail}
+      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
+    volumes:
+      - maildata:/var/mail
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", 'python -c "print(''ok'')"']
+      interval: 60s
+      timeout: 5s
+      retries: 1
+
+  frontend:
+    build: ./frontend
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://yourdomain.com}
+      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import socket; s=socket.create_connection(('127.0.0.1',3000),2); s.close()"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1/health >/dev/null 2>&1 || wget -qO- https://127.0.0.1/health --no-check-certificate >/dev/null 2>&1 || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    volumes:
+      - ./infra/fail2ban:/data:ro
+      - /var/log:/var/log:ro
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    healthcheck:
+      test: ["CMD-SHELL", "fail2ban-client status >/dev/null 2>&1 || exit 0"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+  maildata:
