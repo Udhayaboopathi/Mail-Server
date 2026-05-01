@@ -1,8 +1,8 @@
 "use client";
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type ChangeEvent, type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import { type AuthState, useAuthStore } from "@/lib/auth";
 import { api } from "@/lib/api";
@@ -10,7 +10,6 @@ import { useWhitelabel } from "@/components/providers/WhitelabelProvider";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { whitelabel, setWhitelabel } = useWhitelabel();
   const setSession = useAuthStore((state: AuthState) => state.setSession);
   const [email, setEmail] = useState("");
@@ -19,7 +18,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const domain = searchParams.get("domain");
+    const params = new URLSearchParams(window.location.search);
+    const domain = params.get("domain");
     if (!domain) {
       return;
     }
@@ -31,7 +31,7 @@ export default function LoginPage() {
         }
       })
       .catch(() => undefined);
-  }, [searchParams, setWhitelabel]);
+  }, [setWhitelabel]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,7 +88,7 @@ export default function LoginPage() {
             className="w-full rounded-2xl border border-black/10 bg-paper px-4 py-3 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             placeholder="Email"
             value={email}
-            onChange={(event: { target: { value: string } }) =>
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
               setEmail(event.target.value)
             }
           />
@@ -97,7 +97,7 @@ export default function LoginPage() {
             placeholder="Password"
             type="password"
             value={password}
-            onChange={(event: { target: { value: string } }) =>
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
               setPassword(event.target.value)
             }
           />
