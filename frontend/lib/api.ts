@@ -77,7 +77,7 @@ export async function apiFetch<T>(
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     ...init,
     headers,
     credentials: "include",
@@ -86,7 +86,7 @@ export async function apiFetch<T>(
     const refreshed = await refreshSession();
     if (refreshed) {
       headers.set("Authorization", `Bearer ${refreshed.access_token}`);
-      const retry = await fetch(`${API_BASE}${path}`, {
+      const retry = await fetch(`${getApiBase()}${path}`, {
         ...init,
         headers,
         credentials: "include",
