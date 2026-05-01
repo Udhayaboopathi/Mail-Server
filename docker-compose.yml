@@ -1,37 +1,47 @@
+version: "3.8"
+
 services:
+  # ============================================================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================================================
+
   postgres:
     image: postgres:16-alpine
+    container_name: mail-postgres
+    env_file: backend.env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-emaildb}
-      POSTGRES_USER: ${POSTGRES_USER:-emailuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "15432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U ${POSTGRES_USER:-emailuser} -d ${POSTGRES_DB:-emaildb}
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
-  redis:
+  valkey:
     image: valkey/valkey:unstable-alpine3.23
+    container_name: mail-valkey
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "16379:6379"
     volumes:
-      - redis_data:/data
+      - valkey_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   spamassassin:
     image: instantlinux/spamassassin:latest
+    container_name: mail-spamassassin
     volumes:
       - ./infra/spamassassin:/etc/spamassassin:ro
     healthcheck:
@@ -39,45 +49,41 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
 
   clamav:
     image: clamav/clamav:latest
+    container_name: mail-clamav
     volumes:
       - ./infra/clamav:/etc/clamav:ro
     healthcheck:
       test:
-        - CMD-SHELL
-        - clamdscan --version >/dev/null 2>&1 || clamscan --version >/dev/null 2>&1
+        [
+          "CMD-SHELL",
+          "clamdscan --version >/dev/null 2>&1 || clamscan --version >/dev/null 2>&1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
+
+  # ============================================================================
+  # BACKEND SERVICES
+  # ============================================================================
 
   backend:
     build: ./backend
+    container_name: mail-backend
     env_file: backend.env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      MAILDIR_BASE: ${MAILDIR_BASE:-/var/mail}
-      MAX_MESSAGE_SIZE_MB: ${MAX_MESSAGE_SIZE_MB:-25}
-      DKIM_SELECTOR: ${DKIM_SELECTOR:-mail}
-      DKIM_PRIVATE_KEY_PATH: ${DKIM_PRIVATE_KEY_PATH:-/etc/dkim/private.key}
-      SPAMASSASSIN_HOST: ${SPAMASSASSIN_HOST:-spamassassin}
-      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
-      SMTP_HOSTNAME: ${SMTP_HOSTNAME:-mail.yourdomain.com}
-      POSTGRES_DB: ${POSTGRES_DB:-emaildb}
-      POSTGRES_USER: ${POSTGRES_USER:-emailuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this}
-      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
     ports:
-      - "25:25"
-      - "587:587"
-      - "993:993"
-      - "8000:8000"
+      - "25:25" # SMTP
+      - "587:587" # SMTP TLS
+      - "993:993" # IMAP TLS
+      - "8000:8000" # API
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       spamassassin:
         condition: service_healthy
@@ -94,9 +100,11 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   celery-worker:
     build: ./backend
+    container_name: mail-celery
     env_file: backend.env
     command:
       - celery
@@ -105,30 +113,32 @@ services:
       - worker
       - -B
       - --loglevel=info
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      MAILDIR_BASE: ${MAILDIR_BASE:-/var/mail}
-      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
     volumes:
       - maildata:/var/mail
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", 'python -c "print(''ok'')"']
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A tasks.celery_app inspect active >/dev/null 2>&1 || exit 0",
+        ]
       interval: 60s
       timeout: 5s
       retries: 1
+    restart: unless-stopped
+
+  # ============================================================================
+  # FRONTEND SERVICES
+  # ============================================================================
 
   frontend:
     build: ./frontend
+    container_name: mail-frontend
     env_file: frontend.env
-    environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://yourdomain.com}
-      FRONTEND_URL: ${FRONTEND_URL:-https://yourdomain.com}
     ports:
       - "3000:3000"
     depends_on:
@@ -137,13 +147,19 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - python -c "import socket; s=socket.create_connection(('127.0.0.1',3000),2); s.close()"
+        - "curl -f http://127.0.0.1:3000 || exit 1"
       interval: 30s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # REVERSE PROXY
+  # ============================================================================
 
   nginx:
     build: ./nginx
+    container_name: mail-nginx
     ports:
       - "80:80"
       - "443:443"
@@ -158,13 +174,19 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - wget -qO- http://127.0.0.1/health >/dev/null 2>&1 || wget -qO- https://127.0.0.1/health --no-check-certificate >/dev/null 2>&1 || exit 1
+        - "wget -qO- http://127.0.0.1/health >/dev/null 2>&1 || wget -qO- https://127.0.0.1/health --no-check-certificate >/dev/null 2>&1 || exit 1"
       interval: 30s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # SECURITY
+  # ============================================================================
 
   fail2ban:
     image: crazymax/fail2ban:latest
+    container_name: mail-fail2ban
     volumes:
       - ./infra/fail2ban:/data:ro
       - /var/log:/var/log:ro
@@ -177,8 +199,9 @@ services:
       interval: 60s
       timeout: 10s
       retries: 3
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-  redis_data:
+  valkey_data:
   maildata:
