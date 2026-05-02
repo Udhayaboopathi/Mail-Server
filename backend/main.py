@@ -62,13 +62,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan, title="Email System", version="1.0.0")
 
 app.add_middleware(
-    CORSMiddleware,
-    # allow any origin for testing/dev. Do not use in production with credentials.
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+        CORSMiddleware,
+        # Allow frontend local dev and the backend host for testing.
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            f"http://{settings.server_ip}",
+            f"http://{settings.server_ip}:45645",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 add_rate_limiting(app)
 add_audit_logging(app)
