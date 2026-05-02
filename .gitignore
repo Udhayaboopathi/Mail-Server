@@ -46,7 +46,7 @@ frontend/build/
 *.tsbuildinfo
 
 # Docker / local compose overrides
-docker-compose.override.yml
+
 docker-compose.local.yml
 
 # IDE and OS files

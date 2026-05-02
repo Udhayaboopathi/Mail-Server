@@ -1,0 +1,11 @@
+services:
+  backend:
+    ports:
+      - "18000:8000" # only expose API on host (avoid SMTP/IMAP/SMTP-TLS ports)
+  frontend:
+    ports:
+      - "13000:3000" # map frontend to high port to avoid conflicts
+  nginx:
+    ports: [] # do not publish 80/443 from this compose
+    deploy:
+      replicas: 0
