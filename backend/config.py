@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     invite_base_url: str = Field(default="https://yourdomain.com", validation_alias="INVITE_BASE_URL")
     tracking_base_url: str = Field(default="https://yourdomain.com/track", validation_alias="TRACKING_BASE_URL")
     tracking_enabled: bool = Field(default=True, validation_alias="TRACKING_ENABLED")
+    # Super-admin credentials used by the seeder
+    super_admin_email: str = Field(default="admin@yourdomain.com", validation_alias="SUPER_ADMIN_EMAIL")
+    super_admin_password: str = Field(default="change-immediately", validation_alias="SUPER_ADMIN_PASSWORD")
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     ai_summary_enabled: bool = Field(default=True, validation_alias="AI_SUMMARY_ENABLED")
     ai_smart_reply_enabled: bool = Field(default=True, validation_alias="AI_SMART_REPLY_ENABLED")
