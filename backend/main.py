@@ -63,13 +63,9 @@ app = FastAPI(lifespan=lifespan, title="Email System", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.frontend_url.rstrip("/"),
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_origin_regex=r".*",
-    allow_credentials=True,
+    # allow any origin for testing/dev. Do not use in production with credentials.
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
