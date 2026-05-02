@@ -29,11 +29,38 @@ export default function SuperAdminLoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      if (!response.ok) {
-        throw new Error("Invalid credentials");
+      const raw = await response.text();
+      let payload: unknown = raw;
+      try {
+        payload = raw ? JSON.parse(raw) : {};
+      } catch {
+        payload = raw || { detail: "Unexpected response from server" };
       }
 
-      const tokens = await response.json();
+      if (!response.ok) {
+        const message =
+          typeof payload === "object" &&
+          payload !== null &&
+          "detail" in payload &&
+          typeof (payload as { detail?: unknown }).detail === "string"
+            ? (payload as { detail: string }).detail
+            : "Invalid credentials";
+        throw new Error(message);
+      }
+
+      if (
+        typeof payload !== "object" ||
+        payload === null ||
+        !("access_token" in payload) ||
+        !("refresh_token" in payload)
+      ) {
+        throw new Error("Unexpected response from server");
+      }
+
+      const tokens = payload as {
+        access_token: string;
+        refresh_token: string;
+      };
       setSession(tokens);
 
       // Validate this account can access admin APIs before redirecting.
